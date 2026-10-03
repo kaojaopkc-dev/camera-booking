@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>จองคิวกล้องดิจิทัล</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Kanit", sans-serif; }
+    body { background-color: #fff0f5; margin: 0; padding: 16px; color: #333; }
+    .card { background: #ffffff; border-radius: 20px; padding: 20px; box-shadow: 0 4px 15px rgba(255, 105, 180, 0.15); max-width: 450px; margin: auto; }
+    h2 { text-align: center; color: #d63384; margin-top: 0; font-size: 1.3rem; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 5px; color: #555; }
+    input, select { width: 100%; padding: 10px 12px; border: 1.5px solid #ffd1dc; border-radius: 12px; font-size: 0.95rem; outline: none; background: #fafafa; }
+    input:focus, select:focus { border-color: #ff69b4; background: #fff; }
+    .row { display: flex; gap: 10px; }
+    .row .form-group { flex: 1; }
+    .summary-box { background: #ffe4e1; border-radius: 12px; padding: 12px; margin-top: 15px; text-align: center; }
+    .summary-price { font-size: 1.4rem; font-weight: bold; color: #d63384; }
+    button { width: 100%; padding: 14px; background: linear-gradient(135deg, #ff69b4, #d63384); color: white; border: none; border-radius: 14px; font-size: 1rem; font-weight: bold; cursor: pointer; margin-top: 15px; box-shadow: 0 4px 10px rgba(214, 51, 132, 0.3); }
+    button:disabled { background: #ccc; box-shadow: none; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>📸 จองคิวกล้องดิจิทัล</h2>
+  
+  <div class="form-group">
+    <label>ชื่อผู้จอง (ชื่อเล่น)</label>
+    <input type="text" id="custName" placeholder="เช่น คุณมิน / พี่หมี">
+  </div>
+
+  <div class="form-group">
+    <label>เลือกรุ่นกล้อง</label>
+    <select id="cameraModel" onchange="calculatePrice()">
+      <option value="" disabled selected>-- เลือกรุ่นกล้อง --</option>
+      <option value="Canon IXY 930 IS" data-price="300">Canon IXY 930 IS (300.-/วัน)</option>
+      <option value="Canon IXY 30s" data-price="300">Canon IXY 30s (300.-/วัน)</option>
+      <option value="Canon IXY 31s" data-price="300">Canon IXY 31s (300.-/วัน)</option>
+      <option value="Canon IXY 920 IS" data-price="300">Canon IXY 920 IS (300.-/วัน)</option>
+      <option value="Sony DSC-W350" data-price="280">Sony Cyber-shot W350 (280.-/วัน)</option>
+      <option value="Canon IXUS 105" data-price="280">Canon IXUS 105 (280.-/วัน)</option>
+      <option value="Canon IXY 900 IS" data-price="250">Canon IXY 900 IS (250.-/วัน)</option>
+      <option value="Canon IXUS 185" data-price="250">Canon IXUS 185 (250.-/วัน)</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>ระยะเวลาเช่า</label>
+    <select id="rentalDuration" onchange="calculatePrice()">
+      <option value="1">1 วัน</option>
+      <option value="2">2 วัน</option>
+      <option value="3">3 วัน</option>
+      <option value="5">5 วัน</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <div class="form-group">
+      <label>วันที่รับ</label>
+      <input type="date" id="pickupDate">
+    </div>
+    <div class="form-group">
+      <label>เวลารับ</label>
+      <input type="time" id="pickupTime" value="12:00">
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="form-group">
+      <label>วันที่ส่งคืน</label>
+      <input type="date" id="returnDate">
+    </div>
+    <div class="form-group">
+      <label>เวลาส่งคืน</label>
+      <input type="time" id="returnTime" value="12:00">
+    </div>
+  </div>
+
+  <div class="summary-box">
+    <div style="font-size: 0.85rem; color: #777;">ยอดรวมค่าเช่าโดยประมาณ</div>
+    <div class="summary-price" id="totalDisplay">0 บาท</div>
+  </div>
+
+  <button id="submitBtn" onclick="submitBooking()">ยืนยันข้อมูลและส่งใบจอง ✨</button>
+</div>
+
+<script>
+  const LIFF_ID = "YOUR_LIFF_ID"; // นำ LIFF ID จาก LINE Developers มาวางตรงนี้
+
+  async function initializeLiff() {
+    try {
+      await liff.init({ liffId: LIFF_ID });
+      if (!liff.isLoggedIn()) {
+        liff.login();
+      }
+    } catch (err) {
+      console.error("LIFF Init failed", err);
+    }
+  }
+  initializeLiff();
+
+  function calculatePrice() {
+    const camSelect = document.getElementById('cameraModel');
+    const selectedOption = camSelect.options[camSelect.selectedIndex];
+    const basePrice = parseInt(selectedOption.getAttribute('data-price') || 0);
+    const days = parseInt(document.getElementById('rentalDuration').value || 1);
+    
+    // คำนวณเบื้องต้นตามจำนวนวัน
+    let total = basePrice * days;
+    document.getElementById('totalDisplay').innerText = `${total.toLocaleString()} บาท`;
+    return total;
+  }
+
+  async function submitBooking() {
+    const name = document.getElementById('custName').value.trim();
+    const model = document.getElementById('cameraModel').value;
+    const duration = document.getElementById('rentalDuration').value;
+    const pDate = document.getElementById('pickupDate').value;
+    const pTime = document.getElementById('pickupTime').value;
+    const rDate = document.getElementById('returnDate').value;
+    const rTime = document.getElementById('returnTime').value;
+    const totalPrice = calculatePrice();
+
+    if (!name || !model || !pDate || !rDate) {
+      alert("กรุณากรอกข้อมูลให้ครบถ้วนก่อนส่งนะคะ");
+      return;
+    }
+
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+    btn.innerText = "กำลังสร้างใบสั่งจอง...";
+
+    // โครงสร้าง Flex Message สไตล์ใบเสร็จ Your Order
+    const flexMessage = {
+      type: "flex",
+      altText: `Your Order - จอง ${model}`,
+      contents: {
+        type: "bubble",
+        size: "mega",
+        header: {
+          type: "box",
+          layout: "vertical",
+          backgroundColor: "#ff69b4",
+          paddingAll: "15px",
+          contents: [
+            { type: "text", text: "📸✨ YOUR ORDER ✨📸", weight: "bold", color: "#ffffff", size: "md", align: "center" }
+          ]
+        },
+        body: {
+          type: "box",
+          layout: "vertical",
+          spacing: "md",
+          contents: [
+            { type: "text", text: `คุณ: ${name}`, weight: "bold", size: "lg", color: "#333333" },
+            {
+              type: "box",
+              layout: "vertical",
+              margin: "md",
+              spacing: "sm",
+              contents: [
+                {
+                  type: "box",
+                  layout: "baseline",
+                  contents: [
+                    { type: "text", text: "📷 รุ่น:", size: "sm", color: "#666666", flex: 2 },
+                    { type: "text", text: model, size: "sm", weight: "bold", color: "#111111", flex: 5 }
+                  ]
+                },
+                {
+                  type: "box",
+                  layout: "baseline",
+                  contents: [
+                    { type: "text", text: "🗓️ ระยะเวลา:", size: "sm", color: "#666666", flex: 2 },
+                    { type: "text", text: `${duration} วัน`, size: "sm", color: "#111111", flex: 5 }
+                  ]
+                },
+                {
+                  type: "box",
+                  layout: "baseline",
+                  contents: [
+                    { type: "text", text: "⏰ รับ:", size: "sm", color: "#666666", flex: 2 },
+                    { type: "text", text: `${pDate} เวลา ${pTime}`, size: "sm", color: "#111111", flex: 5 }
+                  ]
+                },
+                {
+                  type: "box",
+                  layout: "baseline",
+                  contents: [
+                    { type: "text", text: "⏰ คืนภายใน:", size: "sm", color: "#666666", flex: 2 },
+                    { type: "text", text: `${rDate} เวลา ${rTime}`, size: "sm", color: "#111111", flex: 5 }
+                  ]
+                }
+              ]
+            },
+            { type: "separator", margin: "lg" },
+            {
+              type: "box",
+              layout: "baseline",
+              margin: "md",
+              contents: [
+                { type: "text", text: "💸 รวมค่าเช่า:", size: "md", weight: "bold", color: "#d63384", flex: 3 },
+                { type: "text", text: `${totalPrice.toLocaleString()} บาท`, size: "lg", weight: "bold", align: "end", color: "#d63384", flex: 4 }
+              ]
+            },
+            {
+              type: "box",
+              layout: "vertical",
+              margin: "md",
+              backgroundColor: "#f8f9fa",
+              paddingAll: "10px",
+              cornerRadius: "8px",
+              contents: [
+                { type: "text", text: "💳 ช่องทางชำระเงิน", weight: "bold", size: "xs", color: "#555555" },
+                { type: "text", text: "ธนาคาร: ไทยพาณิชย์", size: "xs", color: "#333333" },
+                { type: "text", text: "ชื่อบัญชี: ณภัทร ศรีสุข", size: "xs", color: "#333333" },
+                { type: "text", text: "เลขบัญชี: 4371072069", size: "xs", weight: "bold", color: "#000000" }
+              ]
+            },
+            {
+              type: "text",
+              text: "⚠️ โอนแล้วแจ้งสลิปในแชตได้เลยน้า หากเกิน 30 นาทีรบกวนเช็กคิวใหม่อีกครั้งครับ",
+              size: "xxs",
+              color: "#999999",
+              wrap: true,
+              margin: "sm"
+            }
+          ]
+        }
+      }
+    };
+
+    try {
+      // ส่ง Flex Message เข้าห้องแชตของลูกค้าทันที
+      await liff.sendMessages([flexMessage]);
+      liff.closeWindow(); // ปิดหน้าต่างฟอร์ม LIFF สไลด์กลับลงไปแบบเนียนๆ
+    } catch (err) {
+      alert("เกิดข้อผิดพลาดในการส่งข้อมูล: " + err.message);
+      btn.disabled = false;
+      btn.innerText = "ยืนยันข้อมูลและส่งใบจอง ✨";
+    }
+  }
+</script>
+
+</body>
+</html>
